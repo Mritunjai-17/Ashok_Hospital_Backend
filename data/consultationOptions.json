@@ -1,0 +1,16 @@
+{
+  "doctorName": "Dr. Abhinav",
+  "defaultCountryCode": "+91",
+  "consultationPreferences": [
+    "In-Person Consultation",
+    "Video Consultation",
+    "Phone Consultation"
+  ],
+  "preferredTimeSlots": [
+    "Any time",
+    "Morning (09:00 AM - 12:00 PM)",
+    "Afternoon (12:00 PM - 04:00 PM)",
+    "Evening (04:00 PM - 08:00 PM)"
+  ],
+  "maxBookingsPerSlot": 4
+}

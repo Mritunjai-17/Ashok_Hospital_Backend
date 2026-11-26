@@ -1,0 +1,32 @@
+{
+  "name": "hospital-backend",
+  "version": "1.0.0",
+  "description": "Hospital Management System Backend",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "api:dev": "node --watch src/index.js",
+    "api:start": "node src/index.js",
+    "service:enquiries": "node src/scripts/runMicroservice.js enquiries",
+    "service:availability": "node src/scripts/runMicroservice.js availability",
+    "service:notifications": "node src/scripts/runMicroservice.js notifications",
+    "verify": "node src/scripts/verifyApi.js"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.81.0",
+    "mongoose": "^9.13.1",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}
