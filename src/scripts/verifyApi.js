@@ -6,6 +6,7 @@ const { connectDB, disconnectDB } = require('../config/db');
 const { createApp } = require('../config/app');
 const NotificationLog = require('../models/notificationLog.model');
 const { AdminUser } = require('../models/adminUser.model');
+const authService = require('../services/auth.service');
 
 async function request(baseUrl, method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' };
@@ -55,6 +56,10 @@ async function runVerification() {
 
     const options = await request(baseUrl, 'GET', '/api/v1/enquiries/options');
     assert.strictEqual(options.status, 200);
+    assert.ok(Array.isArray(options.json.data.bookingForOptions));
+    assert.ok(Array.isArray(options.json.data.consultationTypes));
+    assert.ok(Array.isArray(options.json.data.areasOfSupport));
+    assert.ok(options.json.data.preferredTimeSlots.includes('Morning'));
 
     // 2. Unauthenticated CRM access must be blocked (401)
     const unauthEnquiries = await request(baseUrl, 'GET', '/api/v1/enquiries');
@@ -75,7 +80,12 @@ async function runVerification() {
       createdSuperId = firstReg.json.data.user._id;
       superToken = firstReg.json.data.token;
     } else {
-      throw new Error('Expected clean database with no pre-seeded super_admin for first-registration test');
+      assert.strictEqual(setupBefore.json.data.hasSuperAdmin, true);
+      if (existingSuperAdmin.approvalStatus !== 'approved' || !existingSuperAdmin.isActive) {
+        throw new Error('Existing super_admin in database must be approved and active to run verification');
+      }
+      superToken = authService.signToken(existingSuperAdmin);
+      console.log('Using existing super_admin for CRM, enquiry, availability & notification checks');
     }
 
     // 3. Subsequent registration becomes pending staff & cannot sign in
@@ -118,31 +128,58 @@ async function runVerification() {
     const staffBlockedAdmin = await request(baseUrl, 'GET', '/api/v1/auth/users', null, staffToken);
     assert.strictEqual(staffBlockedAdmin.status, 403);
 
-    // 6. Public patient form submission + authenticated CRM CRUD + microservices
+    // 6. Public patient form submission + strict validation + availability + CRM CRUD
     const futureDate = getFutureDisplayDate(5);
-    const createRes = await request(baseUrl, 'POST', '/api/v1/enquiries', {
+    const missingRequiredRes = await request(baseUrl, 'POST', '/api/v1/enquiries', {
       fullName: 'Aarav Sharma',
-      countryCode: '+91',
       mobileNumber: '9876543210',
       preferredDate: futureDate,
-      preferredTime: 'Morning (09:00 AM - 12:00 PM)',
-      consultationPreference: 'In-Person Consultation',
-      message: 'Prefer morning slot.',
+      consentAgreed: true,
+    });
+    assert.strictEqual(missingRequiredRes.status, 400);
+
+    const patientEmail = `aarav.${Date.now()}@example.com`;
+    const createRes = await request(baseUrl, 'POST', '/api/v1/enquiries', {
+      bookingFor: 'Myself',
+      consultationType: 'Yes, this is my first consultation.',
+      areaOfSupport: 'Emotional & Behavioural Health',
+      supportTopics: ['Stress', 'Sleep difficulties'],
+      consultationPreference: 'Visit Ashok Hospital',
+      preferredDate: futureDate,
+      preferredTime: 'Morning',
+      fullName: 'Aarav Sharma',
+      countryCode: '+91',
+      mobileNumber: '98765 43210',
+      email: patientEmail,
       consentAgreed: true,
     });
     assert.strictEqual(createRes.status, 201);
+    assert.strictEqual(createRes.json.data.consultationType, 'First consultation');
+    assert.strictEqual(createRes.json.data.mobileNumber, '9876543210');
+    assert.strictEqual(createRes.json.data.email, patientEmail);
     createdEnquiryId = createRes.json.data._id;
     const referenceId = createRes.json.data.referenceId;
+
+    const availabilityRes = await request(
+      baseUrl,
+      'GET',
+      `/api/v1/availability?date=${encodeURIComponent(futureDate)}`,
+      null
+    );
+    assert.strictEqual(availabilityRes.status, 200);
+    const morningSlot = availabilityRes.json.data.slots.find((s) => s.slot === 'Morning');
+    assert.ok(morningSlot && morningSlot.bookedCount >= 1);
 
     const listRes = await request(
       baseUrl,
       'GET',
-      `/api/v1/enquiries?search=${referenceId}`,
+      `/api/v1/enquiries?search=${encodeURIComponent(patientEmail)}`,
       null,
       staffToken
     );
     assert.strictEqual(listRes.status, 200);
     assert.strictEqual(listRes.json.data.length, 1);
+    assert.strictEqual(listRes.json.data[0].referenceId, referenceId);
 
     const statusRes = await request(
       baseUrl,

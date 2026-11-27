@@ -2,6 +2,7 @@ const appointmentEnquiryRepository = require('../repository/appointmentEnquiry.r
 const availabilityService = require('./availability.service');
 const appointmentOptions = require('../data/appointmentOptions');
 const { parsePreferredDate, isPastDate } = require('../utils/dateParser');
+const { normalizeEnquiryPayload } = require('../utils/enquiryNormalizer');
 const eventBus = require('../utils/eventBus');
 const ApiError = require('../utils/ApiError');
 
@@ -9,9 +10,17 @@ class AppointmentEnquiryService {
   getFormOptions() {
     return {
       doctorName: appointmentOptions.doctorName,
+      clinicName: appointmentOptions.clinicName,
+      clinicLocation: appointmentOptions.clinicLocation,
+      helplineNumber: appointmentOptions.helplineNumber,
       defaultCountryCode: appointmentOptions.defaultCountryCode,
+      bookingForOptions: appointmentOptions.bookingForOptions,
+      consultationTypes: appointmentOptions.consultationTypes,
+      areasOfSupport: appointmentOptions.areasOfSupport,
+      supportTopicSuggestions: appointmentOptions.supportTopicSuggestions,
       consultationPreferences: appointmentOptions.consultationPreferences,
       preferredTimeSlots: appointmentOptions.preferredTimeSlots,
+      preferredTimeSlotDetails: appointmentOptions.preferredTimeSlotDetails,
       statuses: appointmentOptions.ENQUIRY_STATUS_LIST,
     };
   }
@@ -32,7 +41,7 @@ class AppointmentEnquiryService {
           body: JSON.stringify({ eventName, enquiry }),
         });
       } catch (err) {
-        console.error(`[AppointmentEnquiryService] Remote event dispatch failed:`, err.message);
+        console.error('[AppointmentEnquiryService] Remote event dispatch failed:', err.message);
       }
     }
   }
@@ -43,7 +52,7 @@ class AppointmentEnquiryService {
       try {
         const params = new URLSearchParams({
           date: date.toISOString().slice(0, 10),
-          time: preferredTime || 'Any time',
+          time: preferredTime || appointmentOptions.FLEXIBLE_TIME_LABEL,
           doctorName: doctorName || appointmentOptions.doctorName,
         });
         const response = await fetch(`${remoteUrl.replace(/\/$/, '')}/api/v1/availability/check?${params}`);
@@ -59,17 +68,22 @@ class AppointmentEnquiryService {
     return availabilityService.checkSlotAvailability(date, preferredTime, doctorName);
   }
 
-  async createEnquiry(payload) {
+  async createEnquiry(rawPayload) {
+    const payload = normalizeEnquiryPayload(rawPayload, { applyDefaults: true });
+
     const parsedDate = parsePreferredDate(payload.preferredDate);
     if (!parsedDate) {
-      throw new ApiError(400, 'Preferred date must be a valid date (DD / MM / YYYY or YYYY-MM-DD)');
+      throw new ApiError(
+        400,
+        'Preferred date must be a valid date (YYYY-MM-DD, DD / MM / YYYY, or Sat, 28 Nov 2026)'
+      );
     }
     if (isPastDate(parsedDate)) {
       throw new ApiError(400, 'Preferred date cannot be in the past');
     }
 
-    const doctorName = payload.doctorName?.trim() || appointmentOptions.doctorName;
-    const preferredTime = payload.preferredTime?.trim() || 'Any time';
+    const doctorName = payload.doctorName || appointmentOptions.doctorName;
+    const preferredTime = payload.preferredTime;
 
     const availability = await this.verifyAvailability(parsedDate, preferredTime, doctorName);
     if (!availability.available) {
@@ -78,13 +92,18 @@ class AppointmentEnquiryService {
 
     const enquiry = await appointmentEnquiryRepository.create({
       doctorName,
-      fullName: payload.fullName.trim(),
-      countryCode: payload.countryCode?.trim() || appointmentOptions.defaultCountryCode,
-      mobileNumber: String(payload.mobileNumber).replace(/\D/g, ''),
+      bookingFor: payload.bookingFor,
+      consultationType: payload.consultationType,
+      areaOfSupport: payload.areaOfSupport || '',
+      supportTopics: payload.supportTopics || [],
+      consultationPreference: payload.consultationPreference,
       preferredDate: parsedDate,
       preferredTime,
-      consultationPreference: payload.consultationPreference?.trim() || '',
-      message: payload.message?.trim() || '',
+      fullName: payload.fullName,
+      countryCode: payload.countryCode || appointmentOptions.defaultCountryCode,
+      mobileNumber: payload.mobileNumber,
+      email: payload.email || '',
+      message: payload.message || '',
       consentAgreed: Boolean(payload.consentAgreed),
       consentTimestamp: new Date(),
     });
@@ -98,6 +117,20 @@ class AppointmentEnquiryService {
 
     if (query.status) {
       filter.status = query.status;
+    }
+    if (query.bookingFor) {
+      filter.bookingFor = appointmentOptions.normalizeBookingFor(query.bookingFor);
+    }
+    if (query.consultationType) {
+      filter.consultationType = appointmentOptions.normalizeConsultationType(query.consultationType);
+    }
+    if (query.areaOfSupport) {
+      filter.areaOfSupport = appointmentOptions.normalizeAreaOfSupport(query.areaOfSupport);
+    }
+    if (query.consultationPreference) {
+      filter.consultationPreference = appointmentOptions.normalizeConsultationPreference(
+        query.consultationPreference
+      );
     }
     if (query.doctorName) {
       filter.doctorName = new RegExp(query.doctorName.trim(), 'i');
@@ -115,7 +148,13 @@ class AppointmentEnquiryService {
     }
     if (query.search) {
       const regex = new RegExp(query.search.trim(), 'i');
-      filter.$or = [{ fullName: regex }, { mobileNumber: regex }, { referenceId: regex }];
+      filter.$or = [
+        { fullName: regex },
+        { mobileNumber: regex },
+        { email: regex },
+        { referenceId: regex },
+        { areaOfSupport: regex },
+      ];
     }
 
     const page = Math.max(1, Number(query.page) || 1);
@@ -140,35 +179,42 @@ class AppointmentEnquiryService {
     return enquiry;
   }
 
-  async updateEnquiry(id, payload) {
+  async updateEnquiry(id, rawPayload) {
     const existing = await this.getEnquiryById(id);
+    const payload = normalizeEnquiryPayload(rawPayload, { applyDefaults: false });
     const updateData = {};
 
-    const stringFields = [
+    const directFields = [
       'doctorName',
+      'bookingFor',
+      'consultationType',
+      'areaOfSupport',
+      'supportTopics',
+      'consultationPreference',
+      'preferredTime',
       'fullName',
       'countryCode',
-      'preferredTime',
-      'consultationPreference',
+      'mobileNumber',
+      'email',
       'message',
       'confirmedTime',
       'staffNotes',
+      'status',
     ];
 
-    for (const field of stringFields) {
+    for (const field of directFields) {
       if (payload[field] !== undefined) {
-        updateData[field] = typeof payload[field] === 'string' ? payload[field].trim() : payload[field];
+        updateData[field] = payload[field];
       }
-    }
-
-    if (payload.mobileNumber !== undefined) {
-      updateData.mobileNumber = String(payload.mobileNumber).replace(/\D/g, '');
     }
 
     if (payload.preferredDate !== undefined) {
       const parsedDate = parsePreferredDate(payload.preferredDate);
       if (!parsedDate) {
-        throw new ApiError(400, 'Preferred date must be valid (DD / MM / YYYY or YYYY-MM-DD)');
+        throw new ApiError(
+          400,
+          'Preferred date must be valid (YYYY-MM-DD, DD / MM / YYYY, or Sat, 28 Nov 2026)'
+        );
       }
       if (isPastDate(parsedDate)) {
         throw new ApiError(400, 'Preferred date cannot be in the past');
@@ -182,14 +228,13 @@ class AppointmentEnquiryService {
       } else {
         const parsedConfirmed = parsePreferredDate(payload.confirmedDate);
         if (!parsedConfirmed) {
-          throw new ApiError(400, 'Confirmed date must be valid (DD / MM / YYYY or YYYY-MM-DD)');
+          throw new ApiError(
+            400,
+            'Confirmed date must be valid (YYYY-MM-DD, DD / MM / YYYY, or Sat, 28 Nov 2026)'
+          );
         }
         updateData.confirmedDate = parsedConfirmed;
       }
-    }
-
-    if (payload.status !== undefined) {
-      updateData.status = payload.status;
     }
 
     const updated = await appointmentEnquiryRepository.updateById(id, updateData);

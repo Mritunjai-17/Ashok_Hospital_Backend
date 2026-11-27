@@ -8,6 +8,18 @@ const {
 const eventBus = require('../utils/eventBus');
 const ApiError = require('../utils/ApiError');
 
+function buildEnquiryMetadata(enquiry) {
+  return {
+    doctorName: enquiry.doctorName,
+    status: enquiry.status,
+    bookingFor: enquiry.bookingFor || '',
+    consultationType: enquiry.consultationType || '',
+    areaOfSupport: enquiry.areaOfSupport || '',
+    supportTopics: Array.isArray(enquiry.supportTopics) ? enquiry.supportTopics : [],
+    recipientEmail: enquiry.email || '',
+  };
+}
+
 class NotificationService {
   constructor() {
     this.listenersInitialized = false;
@@ -48,10 +60,7 @@ class NotificationService {
       eventType: 'enquiry.created',
       messageBody,
       deliveryStatus: 'sent',
-      metadata: {
-        doctorName: enquiry.doctorName,
-        status: enquiry.status,
-      },
+      metadata: buildEnquiryMetadata(enquiry),
     });
   }
 
@@ -66,10 +75,7 @@ class NotificationService {
       eventType: 'enquiry.status_changed',
       messageBody,
       deliveryStatus: 'sent',
-      metadata: {
-        doctorName: enquiry.doctorName,
-        status: enquiry.status,
-      },
+      metadata: buildEnquiryMetadata(enquiry),
     });
   }
 

@@ -1,16 +1,65 @@
 {
   "doctorName": "Dr. Abhinav",
+  "clinicName": "Ashok Hospital",
+  "clinicLocation": "Garhshankar, Punjab",
+  "helplineNumber": "+91 95968 42204",
   "defaultCountryCode": "+91",
+  "bookingForOptions": [
+    "Myself",
+    "A family member",
+    "Someone else"
+  ],
+  "consultationTypes": [
+    "First consultation",
+    "Follow-up",
+    "Not sure"
+  ],
+  "areasOfSupport": [
+    "Mental Health",
+    "Emotional & Behavioural Health",
+    "Women's Mental Health",
+    "I'm not sure yet",
+    "Prefer to discuss with the doctor"
+  ],
+  "supportTopicSuggestions": [
+    "Stress",
+    "Anger management",
+    "Emotional regulation",
+    "Sleep difficulties",
+    "Addiction concerns"
+  ],
   "consultationPreferences": [
-    "In-Person Consultation",
-    "Video Consultation",
-    "Phone Consultation"
+    "Visit Ashok Hospital",
+    "Online Consultation",
+    "Speak With the Appointment Team"
   ],
   "preferredTimeSlots": [
-    "Any time",
-    "Morning (09:00 AM - 12:00 PM)",
-    "Afternoon (12:00 PM - 04:00 PM)",
-    "Evening (04:00 PM - 08:00 PM)"
+    "Flexible timing",
+    "Morning",
+    "Afternoon",
+    "Evening"
+  ],
+  "preferredTimeSlotDetails": [
+    {
+      "value": "Morning",
+      "label": "Morning",
+      "description": "Before noon"
+    },
+    {
+      "value": "Afternoon",
+      "label": "Afternoon",
+      "description": "Noon to late afternoon"
+    },
+    {
+      "value": "Evening",
+      "label": "Evening",
+      "description": "Late afternoon onwards"
+    },
+    {
+      "value": "Flexible timing",
+      "label": "Flexible timing",
+      "description": "Any time that suits the team"
+    }
   ],
   "maxBookingsPerSlot": 4
 }

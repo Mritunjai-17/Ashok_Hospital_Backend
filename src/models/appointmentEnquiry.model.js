@@ -3,6 +3,10 @@ const mongoose = require('mongoose');
 const {
   doctorName: DEFAULT_DOCTOR,
   defaultCountryCode: DEFAULT_COUNTRY_CODE,
+  bookingForOptions: BOOKING_FOR_OPTIONS,
+  consultationTypes: CONSULTATION_TYPES,
+  consultationPreferences: CONSULTATION_PREFERENCES,
+  preferredTimeSlots: PREFERRED_TIME_SLOTS,
   ENQUIRY_STATUS,
   ENQUIRY_STATUS_LIST,
 } = require('../data/appointmentOptions');
@@ -28,6 +32,60 @@ const appointmentEnquirySchema = new mongoose.Schema(
       default: DEFAULT_DOCTOR,
       maxlength: [100, 'Doctor name cannot exceed 100 characters'],
     },
+    bookingFor: {
+      type: String,
+      required: [true, 'Booking for selection is required'],
+      enum: {
+        values: BOOKING_FOR_OPTIONS,
+        message: `Booking for must be one of: ${BOOKING_FOR_OPTIONS.join(', ')}`,
+      },
+      trim: true,
+      index: true,
+    },
+    consultationType: {
+      type: String,
+      required: [true, 'Consultation type is required'],
+      enum: {
+        values: CONSULTATION_TYPES,
+        message: `Consultation type must be one of: ${CONSULTATION_TYPES.join(', ')}`,
+      },
+      trim: true,
+      index: true,
+    },
+    areaOfSupport: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [120, 'Area of support cannot exceed 120 characters'],
+      index: true,
+    },
+    supportTopics: {
+      type: [String],
+      default: [],
+    },
+    consultationPreference: {
+      type: String,
+      required: [true, 'Consultation preference is required'],
+      enum: {
+        values: CONSULTATION_PREFERENCES,
+        message: `Consultation preference must be one of: ${CONSULTATION_PREFERENCES.join(', ')}`,
+      },
+      trim: true,
+    },
+    preferredDate: {
+      type: Date,
+      required: [true, 'Preferred date is required'],
+      index: true,
+    },
+    preferredTime: {
+      type: String,
+      required: [true, 'Preferred time is required'],
+      enum: {
+        values: PREFERRED_TIME_SLOTS,
+        message: `Preferred time must be one of: ${PREFERRED_TIME_SLOTS.join(', ')}`,
+      },
+      trim: true,
+    },
     fullName: {
       type: String,
       required: [true, 'Full name is required'],
@@ -48,22 +106,14 @@ const appointmentEnquirySchema = new mongoose.Schema(
       match: [/^\d{10}$/, 'Mobile number must be exactly 10 digits'],
       index: true,
     },
-    preferredDate: {
-      type: Date,
-      required: [true, 'Preferred date is required'],
-      index: true,
-    },
-    preferredTime: {
+    email: {
       type: String,
       trim: true,
-      default: 'Any time',
-      maxlength: [80, 'Preferred time cannot exceed 80 characters'],
-    },
-    consultationPreference: {
-      type: String,
-      trim: true,
+      lowercase: true,
       default: '',
-      maxlength: [80, 'Consultation preference cannot exceed 80 characters'],
+      maxlength: [160, 'Email cannot exceed 160 characters'],
+      match: [/^$|^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
+      index: true,
     },
     message: {
       type: String,

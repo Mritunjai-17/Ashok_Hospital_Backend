@@ -3,6 +3,8 @@ const {
   doctorName: DEFAULT_DOCTOR,
   preferredTimeSlots,
   maxBookingsPerSlot,
+  FLEXIBLE_TIME_LABEL,
+  normalizePreferredTime,
 } = require('../data/appointmentOptions');
 const { parsePreferredDate, formatDisplayDate, isPastDate } = require('../utils/dateParser');
 const ApiError = require('../utils/ApiError');
@@ -14,7 +16,10 @@ class AvailabilityService {
   async getAvailableSlots(dateInput, doctorName = DEFAULT_DOCTOR) {
     const parsedDate = parsePreferredDate(dateInput);
     if (!parsedDate) {
-      throw new ApiError(400, 'Invalid date format. Expected DD / MM / YYYY or YYYY-MM-DD');
+      throw new ApiError(
+        400,
+        'Invalid date format. Expected YYYY-MM-DD, DD / MM / YYYY, or Sat, 28 Nov 2026'
+      );
     }
 
     if (isPastDate(parsedDate)) {
@@ -33,9 +38,11 @@ class AvailabilityService {
       doctorName
     );
 
-    const concreteSlots = preferredTimeSlots.filter((slot) => slot !== 'Any time');
+    const concreteSlots = preferredTimeSlots.filter((slot) => slot !== FLEXIBLE_TIME_LABEL);
     const slots = concreteSlots.map((slot) => {
-      const bookedCount = activeBookings.filter((b) => b.preferredTime === slot).length;
+      const bookedCount = activeBookings.filter(
+        (b) => normalizePreferredTime(b.preferredTime) === slot
+      ).length;
       const remaining = Math.max(0, maxBookingsPerSlot - bookedCount);
       return {
         slot,
@@ -59,7 +66,11 @@ class AvailabilityService {
   /**
    * Checks whether a specific date and optional time slot can accept a new enquiry.
    */
-  async checkSlotAvailability(dateInput, preferredTime = 'Any time', doctorName = DEFAULT_DOCTOR) {
+  async checkSlotAvailability(
+    dateInput,
+    preferredTime = FLEXIBLE_TIME_LABEL,
+    doctorName = DEFAULT_DOCTOR
+  ) {
     const report = await this.getAvailableSlots(dateInput, doctorName);
     if (!report.isBookable) {
       return {
@@ -69,22 +80,23 @@ class AvailabilityService {
       };
     }
 
-    if (!preferredTime || preferredTime === 'Any time') {
+    const normalizedTime = normalizePreferredTime(preferredTime) || FLEXIBLE_TIME_LABEL;
+
+    if (normalizedTime === FLEXIBLE_TIME_LABEL) {
       const hasAnyOpenSlot = report.slots.some((s) => s.available);
       return {
         available: hasAnyOpenSlot,
-        requestedTime: 'Any time',
+        requestedTime: FLEXIBLE_TIME_LABEL,
         reason: hasAnyOpenSlot ? 'Slots available' : 'All slots are full for the selected date',
         ...report,
       };
     }
 
-    const matchedSlot = report.slots.find((s) => s.slot === preferredTime);
+    const matchedSlot = report.slots.find((s) => s.slot === normalizedTime);
     if (!matchedSlot) {
-      // Allow custom time strings as long as the date itself is bookable
       return {
         available: true,
-        requestedTime: preferredTime,
+        requestedTime: normalizedTime,
         reason: 'Custom time request accepted for team confirmation',
         ...report,
       };
@@ -92,10 +104,10 @@ class AvailabilityService {
 
     return {
       available: matchedSlot.available,
-      requestedTime: preferredTime,
+      requestedTime: normalizedTime,
       reason: matchedSlot.available
         ? 'Requested slot is available'
-        : `Selected slot (${preferredTime}) is currently full`,
+        : `Selected slot (${normalizedTime}) is currently full`,
       ...report,
     };
   }

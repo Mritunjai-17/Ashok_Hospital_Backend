@@ -1,5 +1,33 @@
+const MONTH_INDEX = Object.freeze({
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+});
+
 /**
- * Parses a date input in "DD / MM / YYYY", "DD/MM/YYYY", "DD-MM-YYYY", or "YYYY-MM-DD" format
+ * Parses a date input in "DD / MM / YYYY", "DD/MM/YYYY", "DD-MM-YYYY", "YYYY-MM-DD",
+ * or display format like "Sat, 28 Nov 2026" / "Saturday, 28 November 2026"
  * into a UTC midnight Date object, returning null if invalid.
  *
  * @param {string|Date} input
@@ -27,10 +55,23 @@ function parsePreferredDate(input) {
   } else {
     // Match YYYY-MM-DD (or ISO prefix)
     const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
-    if (!ymdMatch) return null;
-    year = Number(ymdMatch[1]);
-    month = Number(ymdMatch[2]);
-    day = Number(ymdMatch[3]);
+    if (ymdMatch) {
+      year = Number(ymdMatch[1]);
+      month = Number(ymdMatch[2]);
+      day = Number(ymdMatch[3]);
+    } else {
+      // Match "Sat, 28 Nov 2026", "Saturday, 28 November 2026", or "28 Nov 2026"
+      const namedMonthMatch = raw.match(
+        /^(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/
+      );
+      if (!namedMonthMatch) return null;
+
+      day = Number(namedMonthMatch[1]);
+      const monthIdx = MONTH_INDEX[namedMonthMatch[2].toLowerCase()];
+      if (monthIdx === undefined) return null;
+      month = monthIdx + 1;
+      year = Number(namedMonthMatch[3]);
+    }
   }
 
   if (month < 1 || month > 12 || day < 1 || day > 31) {
@@ -50,7 +91,7 @@ function parsePreferredDate(input) {
 }
 
 /**
- * Formats a Date into "DD / MM / YYYY" matching the frontend form display.
+ * Formats a Date into "DD / MM / YYYY" for display.
  *
  * @param {Date} date
  * @returns {string}
